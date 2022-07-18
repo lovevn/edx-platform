@@ -1566,6 +1566,70 @@ class CourseEnrollment(models.Model):
             segment_traits['email'] = self.user.email
 
             if event_name == EVENT_NAME_ENROLLMENT_ACTIVATED:
+                from lms.djangoapps.courseware.courses import get_course_date_blocks, get_course_with_access
+                from openedx.core.djangoapps.catalog.utils import get_course_data
+                marketing_root_url = settings.MKTG_URLS.get('ROOT')
+                course = get_course_with_access(self.user, 'load', self.course_id, check_if_enrolled=False)
+                course_date_blocks = get_course_date_blocks(course, self.user)
+                course_date_list = []
+                for date_block in course_date_blocks[0:3]:
+                    obj = {
+                        'title': date_block.title,
+                        'assignment_type': date_block.assignment_type,
+                        'date': date_block.date,
+                        'link': date_block.link
+                    }
+                    course_date_list.append(obj)
+                course_key = '+'.join([self.course_id.org, self.course_id.course])
+                course_data = get_course_data(course_key)
+                course_run = [run for run in course_data['course_runs']
+                              if run['availability'] in ['Current', 'Upcoming']][0]
+                if course_run:
+                    instructors = []
+                    if len(course_run['staff']) % 2 != 0:
+                        staff = course_run['staff'][0]
+                        segment_properties['first_instructor'] = {
+                            'name': ' '.join([staff['given_name'], staff['family_name']]),
+                            'profile_image_url': staff['profile_image_url'],
+                            'organization_name': staff['position']['organization_name'],
+                            'bio_url': f"{marketing_root_url}/bio/{staff['slug']}"
+                        }
+                        for staff in course_run['staff'][1:]:
+                            obj = {
+                                'name': ' '.join([staff['given_name'], staff['family_name']]),
+                                'profile_image_url': staff['profile_image_url'],
+                                'organization_name': staff['position']['organization_name'],
+                                'bio_url': f"{marketing_root_url}/bio/{staff['slug']}"
+                            }
+                            instructors.append(obj)
+                    else:
+                        for staff in course_run['staff']:
+                            obj = {
+                                'name': ' '.join([staff['given_name'], staff['family_name']]),
+                                'profile_image_url': staff['profile_image_url'],
+                                'organization_name': staff['position']['organization_name'],
+                                'bio_url': f"{marketing_root_url}/bio/{staff['slug']}"
+                            }
+                            instructors.append(obj)
+                    segment_properties['instructors'] = instructors
+                    segment_properties['pacing_type'] = course_run['pacing_type']
+                    segment_properties['min_effort'] = course_run['min_effort']
+                    segment_properties['max_effort'] = course_run['max_effort']
+                    segment_properties['weeks_to_complete'] = course_run['weeks_to_complete']
+                    segment_properties['enrollment_count'] = course_run['enrollment_count']
+                segment_properties['course_date_blocks'] = course_date_list
+                segment_properties['title'] = course_data['title']
+                segment_properties['short_description'] = course_data['short_description']
+                segment_properties['marketing_url'] = course_data['marketing_url']
+                segment_properties['partner_image_url'] = course_data['owners'][0]['logo_image_url']
+                segment_properties['banner_image_url'] = course_data['image']['src']
+                segment_properties['course_price'] = self.course_price
+                segment_properties['username'] = self.user.username
+                segment_properties['course_run_key'] = self.course_id
+                segment_properties['lms_base_url'] = configuration_helpers\
+                    .get_value('LMS_ROOT_URL', settings.LMS_ROOT_URL)
+                segment_properties['learning_base_url'] = configuration_helpers\
+                    .get_value('LEARNING_MICROFRONTEND_URL', settings.LEARNING_MICROFRONTEND_URL)
                 segment_properties['email'] = self.user.email
                 # This next property is for an experiment, see method's comments for more information
                 segment_properties['external_course_updates'] = set_up_external_updates_for_enrollment(self.user,
