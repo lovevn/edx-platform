@@ -132,6 +132,7 @@ TRANSITION_STATES = (
     (UNENROLLED_TO_UNENROLLED, UNENROLLED_TO_UNENROLLED),
     (DEFAULT_TRANSITION_STATE, DEFAULT_TRANSITION_STATE)
 )
+IS_MARKETABLE = 'is_marketable'
 
 
 class AnonymousUserId(models.Model):
@@ -847,6 +848,8 @@ def user_post_save_callback(sender, **kwargs):
     # Ensure the user has a profile when run via management command
     _called_by_management_command = getattr(user, '_called_by_management_command', None)
     if _called_by_management_command:
+        if settings.MARKETING_EMAILS_OPT_IN:
+            UserAttribute.set_user_attribute(user, IS_MARKETABLE, 'false')
         try:
             __ = user.profile
         except UserProfile.DoesNotExist:
